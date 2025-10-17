@@ -2,6 +2,8 @@
 Import Dynamix Three Space (DTS) models from Torque3D into Blender
 It can import 2 UV channels, vertex colors, object position and rotation
 
+It can import material names, but material parameters (such as color) are not currently imported
+
 ## Installation
 1. Grab the latest `io_scene_dtst3d.zip` here https://github.com/Dummiesman/DynamixThreeSpaceBlenderAddon/releases
 2. In Blender, select Edit > Preferences
