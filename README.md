@@ -4,6 +4,11 @@ It can import 2 UV channels, vertex colors, object position and rotation
 
 It can import material names, but material parameters (such as color) are not currently imported
 
+## Version Support
+Versions 19, 20, 21, 22, 23, 24, 25, and 26 should function.
+
+The code is based off the Torque3D source code so adding in newer versions should be relatively easy
+
 ## Installation
 1. Grab the latest `io_scene_dtst3d.zip` here https://github.com/Dummiesman/DynamixThreeSpaceBlenderAddon/releases
 2. In Blender, select Edit > Preferences
