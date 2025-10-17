@@ -1,4 +1,4 @@
-# DynamixThreeSpaceBlenderAddon
+# Dynamix Three SpaceBlender Addon
 Import Dynamix Three Space (DTS) models from Torque3D into Blender
 It can import 2 UV channels, vertex colors, object position and rotation
 
