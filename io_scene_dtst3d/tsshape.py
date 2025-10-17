@@ -12,6 +12,7 @@ class MeshType:
     DecalMeshType = 2
     SortedMeshType = 3
     NullMeshType = 4
+
     TypeMask = 7  # result of 0 | 1 | 2 | 3 | 4
 
 class TQuaternionF:

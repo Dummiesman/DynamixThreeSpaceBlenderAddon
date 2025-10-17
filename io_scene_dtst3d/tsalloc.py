@@ -68,8 +68,8 @@ class TSAlloc:
             raise ValueError(f"Bad 8-bit guard, wanted {self.guard8}, got {got8}")
 
         self.guard32 += 1
-        self.guard16 += 1
-        self.guard8 += 1
+        self.guard16 = ((self.guard16 + 1) & 0xFFFF)
+        self.guard8 = ((self.guard8 + 1) & 0xFF)
 
         return True
 
