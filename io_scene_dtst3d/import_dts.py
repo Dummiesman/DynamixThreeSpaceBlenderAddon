@@ -19,11 +19,6 @@ def create_material(material_name):
         mtl.use_nodes = True
         mtl.use_backface_culling = True
 
-        # Set Base Color in Principled BSDF
-        bsdf = mtl.node_tree.nodes.get("Principled BSDF")
-        if bsdf:
-            bsdf.inputs['Base Color'].default_value = (1.0, 1.0, 1.0, 1.0)
-
     return mtl
 
 
