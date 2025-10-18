@@ -8,6 +8,19 @@ from io_scene_dtst3d.tsshape import *
 ######################################################
 # HELPERS
 ######################################################
+def triangle_strip_to_list(strip, clockwise):
+    """convert a strip of triangles into a list of triangles"""
+    triangle_list = []
+    for v in range(len(strip) - 2):
+        if clockwise:
+            triangle_list.extend([strip[v+1], strip[v], strip[v+2]])
+        else:
+            triangle_list.extend([strip[v], strip[v+1], strip[v+2]])
+        clockwise = not clockwise
+
+    return triangle_list
+
+
 def create_material(material_name):
     # Try to get existing material
     mtl = bpy.data.materials.get(material_name)
@@ -60,18 +73,18 @@ def create_dummy_object_from_shape_object(shape, shape_object):
     return ob
 
 
-def create_mesh_object_from_shape_object(shape, shape_object):
+def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
     scn = bpy.context.scene
     
     shape_node = shape.nodes[shape_object.node_index]
     shape_object_name = shape.names[shape_object.name_index]
-    shape_mesh = shape.meshes[shape_object.start_mesh_index]
+    shape_mesh = shape.meshes[shape_object.start_mesh_index + shape_mesh_index]
 
     # create material remap
     material_remap = {}
 
     # create blender mesh
-    me = bpy.data.meshes.new('DTSMesh' + str(shape_object.start_mesh_index))
+    me = bpy.data.meshes.new('DTSMesh' + str(shape_object.start_mesh_index + shape_mesh_index))
     
     bm = bmesh.new()
     bm.from_mesh(me)
@@ -94,9 +107,9 @@ def create_mesh_object_from_shape_object(shape, shape_object):
     scn.collection.objects.link(ob)
 
     # assemble blender mesh
-    mesh_indices = shape_mesh.indices
-    
+    mesh_indices = shape_mesh.indices 
     vertices = []
+
     for vert in shape_mesh.vertices:
         vertices.append(bm.verts.new(translate_vert(vert)))
     
@@ -107,10 +120,16 @@ def create_mesh_object_from_shape_object(shape, shape_object):
             material_remap[prim.material_index] = len(material_remap)
             ob.data.materials.append(create_material(ts_material.name))
 
+        if prim.type == TSDrawPrimitiveType.Triangles or prim.type == TSDrawPrimitiveType.Strip:
+            prim_indices = []
+            if prim.type == TSDrawPrimitiveType.Triangles:
+                prim_indices = mesh_indices[prim.start:prim.start+prim.num_elements]
+            else:
+                strip_indices = mesh_indices[prim.start:prim.start+prim.num_elements]
+                prim_indices = triangle_strip_to_list(strip_indices, False)
 
-        if prim.type == TSDrawPrimitiveType.Triangles:
-            for x in range(0, prim.num_elements, 3):
-                indices = (mesh_indices[prim.start + x + 2], mesh_indices[prim.start + x + 1], mesh_indices[prim.start + x])
+            for x in range(0, len(prim_indices), 3):
+                indices = (prim_indices[x + 2], prim_indices[x + 1], prim_indices[x])
                 try:
                     bmverts = (vertices[indices[0]], vertices[indices[1]], vertices[indices[2]])
                     face = bm.faces.new(bmverts)
@@ -141,7 +160,7 @@ def create_mesh_object_from_shape_object(shape, shape_object):
 
     return ob
 
-    
+
 def read_dts_file(file, filepath):
     # read shape
     shape = TSShape()
@@ -151,6 +170,8 @@ def read_dts_file(file, filepath):
     hierarchy = {}
 
     for shape_index, shape_object in enumerate(shape.objects):
+        shape_object_name = shape.names[shape_object.name_index]
+        print(f"Importing shape object {shape_object_name} with {shape_object.num_meshes} meshes")
         if shape_object.num_meshes > 0:
             shape_mesh = shape.meshes[shape_object.start_mesh_index]
             shape_node = shape.nodes[shape_object.node_index]
@@ -158,16 +179,19 @@ def read_dts_file(file, filepath):
             parent = None if shape_node.parent_index < 0 else hierarchy.get(shape_node.parent_index)
             created_object = None
             if isinstance(shape_mesh, TSMesh):
-                created_object = create_mesh_object_from_shape_object(shape, shape_object)
+                created_object = create_mesh_object_from_shape_object(shape, shape_object, 0)
             elif isinstance(shape_mesh, TSNullMesh):
                 created_object = create_dummy_object_from_shape_object(shape, shape_object)
+            else:
+                print(f"Not creating object for {shape_object_name}: unsupported TSMesh type")
 
             if created_object is not None:
                 hierarchy[shape_object.node_index] = created_object
                 if parent is not None:
                     created_object.parent = parent
                     created_object.matrix_parent_inverse = parent.matrix_world.inverted()
-
+        else:
+            print(f"Not creating object for {shape_object_name}: no assigned mesh")
 
 ######################################################
 # IMPORT

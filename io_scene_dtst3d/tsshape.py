@@ -81,18 +81,62 @@ class ShapeObject:
         ts_alloc.read32()
         ts_alloc.read32()
 
+class ShapeDetail:
+    def __init__(self):
+        self.name_index = -1
+        self.sub_shape_num = -1
+        self.object_detail_num = -1
+        self.size = 0.0
+        self.average_error = 0.0
+        self.max_error = 0.0
+        self.poly_count = 0
+
+        # billboard settings
+        self.billboard_dimension = 0
+        self.billboard_detail_level = 0
+        self.billboard_equator_steps = 0
+        self.billboard_polar_steps = 0
+        self.billboard_polar_angle = 0.0
+        self.billboard_include_poles = 0
+
+    def assemble(self, ts_alloc, version):
+        self.name_index = ts_alloc.read32()
+        self.sub_shape_num = ts_alloc.read32()
+        self.object_detail_num = ts_alloc.read32()
+        self.size = ts_alloc.read_float()
+        self.average_error = ts_alloc.read_float()
+        self.max_error = ts_alloc.read_float()
+        self.poly_count = ts_alloc.read32()
+
+        if version >= 26:
+            self.billboard_dimension = ts_alloc.read32()
+            self.billboard_detail_level = ts_alloc.read32()
+            self.billboard_equator_steps = ts_alloc.read32()
+            self.billboard_polar_steps = ts_alloc.read32()
+            self.billboard_polar_angle = ts_alloc.read_float()
+            self.billboard_include_poles = ts_alloc.read32()
+
 class TSMaterial:
     def __init__(self, name):
         self.name = name
 
 class TSShape:
     def __init__(self):
+        self._details: List[ShapeDetail] = []
         self._meshes: List[TSMesh] = []
         self._nodes: List[ShapeNode] = []
         self._objects: List[ShapeObject] = []
         self._names: List[str] = []
         self._materials: List[TSMaterial] = []
+        self._sub_shape_first_node : List[int] = []
+        self._sub_shape_num_nodes : List[int] = []
+        self._sub_shape_first_object : List[int] = []
+        self._sub_shape_num_objects : List[int] = []
 
+    @property
+    def details(self) -> List[ShapeDetail]:
+        return self._details
+    
     @property
     def materials(self) -> List[TSMaterial]:
         return self._materials
@@ -113,6 +157,29 @@ class TSShape:
     def names(self) -> List[str]:
         return self._names
 
+    def get_sub_shape_for_node(self, node_index) -> int:
+        for x in range(len(self._sub_shape_first_node)):
+            start = self._sub_shape_first_node[x]
+            end = start + self._sub_shape_num_nodes[x]
+            if (node_index >= start) and (node_index < end):
+                return x
+        return -1
+    
+    def get_sub_shape_for_object(self, object_index) -> int:
+        for x in range(len(self._sub_shape_first_object)):
+            start = self._sub_shape_first_object[x]
+            end = start + self._sub_shape_num_objects[x]
+            if (object_index >= start) and (object_index < end):
+                return x
+        return -1
+    
+    def get_sub_shape_details(self, sub_shape_index) -> List[ShapeDetail]:
+        sub_shape_details = []
+        for detail in self._details:
+            if detail.sub_shape_num == sub_shape_index or detail.sub_shape_num < 0:
+                sub_shape_details.append(detail)
+        return sub_shape_details
+    
     def read(self, stream: BinaryIO):
         reader = stream
 
@@ -230,17 +297,17 @@ class TSShape:
 
         # Subshape reading
         for _ in range(num_sub_shapes):
-            ts_alloc.read32()  # first node
+            self._sub_shape_first_node.append(ts_alloc.read32())
         for _ in range(num_sub_shapes):
-            ts_alloc.read32()  # first object
+            self._sub_shape_first_object.append(ts_alloc.read32())
         for _ in range(num_sub_shapes):
             ts_alloc.read32()  # deprecated subShapeFirstDecal
         ts_alloc.check_guard()
 
         for _ in range(num_sub_shapes):
-            ts_alloc.read32()  # num nodes
+            self._sub_shape_num_nodes.append(ts_alloc.read32())
         for _ in range(num_sub_shapes):
-            ts_alloc.read32()  # num objects
+            self._sub_shape_num_objects.append(ts_alloc.read32())
         for _ in range(num_sub_shapes):
             ts_alloc.read32()  # deprecated subShapeNumDecals
         ts_alloc.check_guard()
@@ -309,10 +376,11 @@ class TSShape:
             ts_alloc.read32()
         ts_alloc.check_guard()
 
-        num_detail_fields = 13 if version >= 26 else 7
         for _ in range(num_details):
-            for _ in range(num_detail_fields):
-                ts_alloc.read32()
+            detail = ShapeDetail()
+            detail.assemble(ts_alloc, version)
+            self._details.append(detail)
+
         ts_alloc.check_guard()
 
         if version >= 27:
@@ -352,3 +420,5 @@ class TSShape:
 
         if version < 23:
             raise NotImplementedError("Skin information")
+
+            

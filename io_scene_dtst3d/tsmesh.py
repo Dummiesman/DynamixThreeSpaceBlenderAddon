@@ -15,21 +15,15 @@ class TSDrawPrimitiveType:
     TypeMask     = Strip|Fan|Triangles
 
 class TSDrawPrimitive:
-    def __init__(self):
-        self.start = 0
-        self.num_elements = 0
-        self.material_index = 0
-        self.type = 0
-        self.has_no_material = False
+    def __init__(self, start, num_elements, material_and_flags):
+        self.start = start
+        self.num_elements = num_elements
+        self.material_index = material_and_flags
 
-    def assemble(self, ts_alloc):
-        self.start = ts_alloc.read32()
-        self.num_elements = ts_alloc.read32()
-        self.material_index = ts_alloc.read32()
+        self.has_no_material = (material_and_flags & TSDrawPrimitiveType.NoMaterial) == TSDrawPrimitiveType.NoMaterial
+        self.type = material_and_flags & TSDrawPrimitiveType.TypeMask
+        self.material_index = material_and_flags & TSDrawPrimitiveType.MaterialMask
 
-        self.has_no_material = (self.material_index & TSDrawPrimitiveType.NoMaterial) == TSDrawPrimitiveType.NoMaterial
-        self.type = self.material_index & TSDrawPrimitiveType.TypeMask
-        self.material_index = self.material_index & TSDrawPrimitiveType.MaterialMask
         
 class TSNullMesh:
     pass
@@ -148,19 +142,43 @@ class TSMesh:
         sz_prim_in = 0
         sz_ind_in = 0
 
+        starts = []
+        elements = []
+        material_indices = []
+        
         if version > 25:
+            # mesh primitives (start, numElements) and indices are stored as 32 bit values
             sz_prim_in = ts_alloc.read32()
             for _ in range(sz_prim_in):
-                prim = TSDrawPrimitive()
-                prim.assemble(ts_alloc)
-                self._primitives.append(prim)
+                starts.append(ts_alloc.read32())
+                elements.append(ts_alloc.read32())
+                material_indices.append(ts_alloc.read32())
 
             sz_ind_in = ts_alloc.read32()
             for _ in range(sz_ind_in):
                 self._indices.append(ts_alloc.read32())
         else:
-            raise Exception("Unsupported mesh version < 25")
+            # mesh primitives (start, numElements) indices are stored as 16 bit values
+            sz_prim_in = ts_alloc.read32()
+            for _ in range(sz_prim_in):
+                starts.append(ts_alloc.read16())
+                elements.append(ts_alloc.read16())
+            for _ in range(sz_prim_in):
+                material_indices.append(ts_alloc.read32())
 
+            sz_ind_in = ts_alloc.read32()
+            for _ in range(sz_ind_in):
+                self._indices.append(ts_alloc.read16())
+
+        # setup primitives from data
+        for x in range(sz_prim_in):
+            start = starts[x]
+            num_elements = elements[x]
+            material_index = material_indices[x]
+
+            prim = TSDrawPrimitive(start, num_elements, material_index)
+            self._primitives.append(prim)
+            
         # merge indices (deprecated)
         num_merge_indices = ts_alloc.read32()
         for _ in range(num_merge_indices):
