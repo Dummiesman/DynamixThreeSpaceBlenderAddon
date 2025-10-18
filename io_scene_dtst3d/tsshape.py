@@ -3,9 +3,10 @@ from typing import List, BinaryIO
 
 from io_scene_dtst3d.tsmesh import *
 from io_scene_dtst3d.tsalloc import *
+from io_scene_dtst3d.tsmateriallist import *
+from io_scene_dtst3d.integerset import *
 
 #from tsmesh import *
-
 class MeshType:
     StandardMeshType = 0
     SkinMeshType = 1
@@ -14,6 +15,16 @@ class MeshType:
     NullMeshType = 4
 
     TypeMask = 7  # result of 0 | 1 | 2 | 3 | 4
+
+class SequenceFlags:
+    UniformScale = 1 << 0
+    AlignedScale = 1 << 1
+    ArbitraryScale = 1 << 2
+    Blend = 1 << 3
+    Cyclic = 1 << 4
+    MakePath = 1 << 5
+    HasTranslucency = 1 << 6
+    AnyScale = (1 << 0) | (1 << 1) | (1 << 2)
 
 class TQuaternionF:
     x: float
@@ -36,7 +47,7 @@ class TQuaternion16:
     MAX_VALUE = 0x7fff 
 
     def __init__(self, x, y, z, w):
-        self.x = x
+        self.x : int = x
         self.y = y
         self.z = z
         self.w = w   
@@ -49,11 +60,11 @@ class TQuaternion16:
 
 class ShapeNode:
     def __init__(self):
-        self.name_index = -1
-        self.parent_index = -1
+        self.name_index : int = -1
+        self.parent_index : int = -1
 
-        self.translation = (0, 0, 0)
-        self.rotation = TQuaternion16(0, 0, 0, TQuaternion16.MAX_VALUE)
+        self.translation : tuple[int, int, int] = (0, 0, 0)
+        self.rotation : TQuaternion16 = TQuaternion16(0, 0, 0, TQuaternion16.MAX_VALUE)
 
     def assemble(self, ts_alloc):
         self.name_index = ts_alloc.read32()
@@ -66,10 +77,10 @@ class ShapeNode:
 
 class ShapeObject:
     def __init__(self):
-        self.name_index = -1
-        self.num_meshes = -1
-        self.start_mesh_index = -1
-        self.node_index = -1
+        self.name_index : int = -1
+        self.num_meshes : int = -1
+        self.start_mesh_index : int = -1
+        self.node_index : int = -1
 
     def assemble(self, ts_alloc):
         self.name_index = ts_alloc.read32()
@@ -83,21 +94,21 @@ class ShapeObject:
 
 class ShapeDetail:
     def __init__(self):
-        self.name_index = -1
-        self.sub_shape_num = -1
-        self.object_detail_num = -1
-        self.size = 0.0
-        self.average_error = 0.0
-        self.max_error = 0.0
-        self.poly_count = 0
+        self.name_index : int = -1
+        self.sub_shape_num : int = -1
+        self.object_detail_num : int = -1
+        self.size : float = 0.0
+        self.average_error : float = 0.0
+        self.max_error : float = 0.0
+        self.poly_count : int = 0
 
         # billboard settings
-        self.billboard_dimension = 0
-        self.billboard_detail_level = 0
-        self.billboard_equator_steps = 0
-        self.billboard_polar_steps = 0
-        self.billboard_polar_angle = 0.0
-        self.billboard_include_poles = 0
+        self.billboard_dimension : int = 0
+        self.billboard_detail_level : int = 0
+        self.billboard_equator_steps : int = 0
+        self.billboard_polar_steps : int = 0
+        self.billboard_polar_angle : int = 0.0
+        self.billboard_include_poles : int = 0
 
     def assemble(self, ts_alloc, version):
         self.name_index = ts_alloc.read32()
@@ -116,30 +127,115 @@ class ShapeDetail:
             self.billboard_polar_angle = ts_alloc.read_float()
             self.billboard_include_poles = ts_alloc.read32()
 
-class TSMaterial:
-    def __init__(self, name):
-        self.name = name
+class ShapeSequence:
+    def __init__(self):
+        self.name_index : int = -1
+        self.flags : int = 0
+        self.duration : float = 0.0
+        self.first_ground_frame : int = -1
+        self.num_ground_frames : int = 0
+        self.priority : int = 0
+        self.base_rotation : int = -1
+        self.base_translation : int = -1
+        self.base_scale : int = -1
+        self.base_object_state : int = -1
+        self.first_trigger : int = -1
+        self.num_triggers : int = 0
+        self.num_keyframes : int = 0
+        self.tool_begin : float = 0.0
+        
+        self.rotation_matters : TSIntegerSet = TSIntegerSet() # set of nodes
+        self.translation_matters : TSIntegerSet = TSIntegerSet() # set of nodes
+        self.scale_matters : TSIntegerSet = TSIntegerSet() # set of nodes
+        self.vis_matters : TSIntegerSet = TSIntegerSet() # set of objects
+        self.frame_matters : TSIntegerSet = TSIntegerSet() # set of objects
+        self.mat_frame_matters : TSIntegerSet = TSIntegerSet() # set of objects
+
+
+    def read(self, stream : BinaryIO, version):
+        reader = stream
+
+        self.name_index = struct.unpack('<i', reader.read(4))[0]
+        if version > 21:
+            self.flags = struct.unpack('<L', reader.read(4))[0]
+        else:
+            self.flags = 0
+
+        self.num_keyframes = struct.unpack('<L', reader.read(4))[0]
+        self.duration = struct.unpack('<f', reader.read(4))[0]
+
+        if version < 22:
+            # old flags
+            if reader.read(1)[0] != 0:
+                self.flags |= SequenceFlags.Blend
+            if reader.read(1)[0] != 0:
+                self.flags |= SequenceFlags.Cyclic
+            if reader.read(1)[0] != 0:
+                self.flags |= SequenceFlags.MakePath
+
+        self.priority = struct.unpack('<i', reader.read(4))[0]
+        self.first_ground_frame = struct.unpack('<i', reader.read(4))[0]
+        self.num_ground_frames = struct.unpack('<L', reader.read(4))[0]
+
+        if version > 21:
+            self.base_rotation = struct.unpack('<i', reader.read(4))[0]
+            self.base_translation = struct.unpack('<i', reader.read(4))[0]
+            self.base_scale = struct.unpack('<i', reader.read(4))[0]
+            self.base_object_state = struct.unpack('<i', reader.read(4))[0]
+            base_decal_state = struct.unpack('<i', reader.read(4))[0] # DEPRECATED
+        else:
+            self.base_rotation = struct.unpack('<i', reader.read(4))[0]
+            self.base_translation = self.base_rotation
+            self.base_object_state = struct.unpack('<i', reader.read(4))[0]
+            base_decal_state = struct.unpack('<i', reader.read(4))[0] # DEPRECATED
+
+        self.first_trigger = struct.unpack('<i', reader.read(4))[0]
+        self.num_triggers = struct.unpack('<L', reader.read(4))[0]
+        self.tool_begin = struct.unpack('<f', reader.read(4))[0]
+
+        # membership sets
+        self.rotation_matters.read(stream)
+        if version < 22:
+            self.translation_matters.copy_from(self.rotation_matters)
+        else:
+            self.translation_matters.read(stream)
+            self.scale_matters.read(stream)
+
+        dummy_set = TSIntegerSet()
+        dummy_set.read(stream) # DEPRECATED: decals
+        dummy_set.read(stream) # DEPRECATED: Ifl materials
+
+        self.vis_matters.read(stream)
+        self.frame_matters.read(stream)
+        self.mat_frame_matters.read(stream)
+        
+        
 
 class TSShape:
     def __init__(self):
+        self._sequences: List[ShapeSequence] = []
         self._details: List[ShapeDetail] = []
         self._meshes: List[TSMesh] = []
         self._nodes: List[ShapeNode] = []
         self._objects: List[ShapeObject] = []
         self._names: List[str] = []
-        self._materials: List[TSMaterial] = []
+        self._material_list: TSMaterialList = TSMaterialList()
         self._sub_shape_first_node : List[int] = []
         self._sub_shape_num_nodes : List[int] = []
         self._sub_shape_first_object : List[int] = []
         self._sub_shape_num_objects : List[int] = []
 
     @property
+    def sequences(self) -> List[ShapeSequence]:
+        return self._sequences
+    
+    @property
     def details(self) -> List[ShapeDetail]:
         return self._details
     
     @property
     def materials(self) -> List[TSMaterial]:
-        return self._materials
+        return self._material_list.materials
     
     @property
     def meshes(self) -> List[TSMesh]:
@@ -201,20 +297,12 @@ class TSShape:
         # sequences
         num_sequences = struct.unpack('<i', reader.read(4))[0]
         for _ in range(num_sequences):
-            raise NotImplementedError("Sequences")
+            sequence = ShapeSequence()
+            sequence.read(stream, version)
+            self._sequences.append(sequence)
 
         # materials
-        mat_list_version = struct.unpack('<B', reader.read(1))[0]
-        mat_count = struct.unpack('<i', reader.read(4))[0]
-        
-        for x in range(mat_count):
-            mat_name_length = struct.unpack('<B', reader.read(1))[0]
-            mat_name_bytes = reader.read(mat_name_length)
-            mat_name = mat_name_bytes.decode('utf-8')
-            
-            self._materials.append(TSMaterial(mat_name))
-            
-        # see Torque3D material list parsing if properties are desired
+        self._material_list.read(stream, version)
 
     def read_from_path(self, path: str):
         with open(path, "rb") as f:

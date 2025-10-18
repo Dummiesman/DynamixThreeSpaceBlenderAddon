@@ -61,12 +61,11 @@ class TSMesh:
     def indices(self):
         return self._indices
     
-    def copy_data_from(self, other):
-        """Copies mesh data from a parent mesh"""
+    def copy_vertex_data_from(self, other):
+        """Copies mesh vertex data from a parent mesh"""
         self._vertices = other._vertices.copy()
         self._tvertices = other._tvertices.copy()
         self._t2vertices = other._t2vertices.copy()
-        self._primitives = other._primitives.copy()
         self._colors = other._colors.copy()
 
     def assemble(self, ts_alloc, version):
@@ -93,31 +92,31 @@ class TSMesh:
         num_verts = ts_alloc.read32()
 
         if parent_mesh < 0:
-            # independent mesh: read vertices
-            for _ in range(num_verts):
-                vertex = (ts_alloc.read_float(), ts_alloc.read_float(), ts_alloc.read_float())
+            verts_buffer = ts_alloc.read_float_list(num_verts*3)
+            for x in range(0, num_verts*3, 3):
+                vertex = (verts_buffer[x], verts_buffer[x+1], verts_buffer[x+2])
                 self._vertices.append(vertex)
 
         num_tverts = ts_alloc.read32()
         if parent_mesh < 0:
-            # read texture coords
-            for _ in range(num_tverts):
-                tvertex = (ts_alloc.read_float(), ts_alloc.read_float())
+            tverts_buffer = ts_alloc.read_float_list(num_tverts*2)
+            for x in range(0, num_tverts*2, 2):
+                tvertex = (tverts_buffer[x], tverts_buffer[x+1])
                 self._tvertices.append(tvertex)
 
         # 2nd texture channel and colors
         if version > 25:
             num_t2verts = ts_alloc.read32()
             if parent_mesh < 0:
-                for _ in range(num_t2verts):
-                    tvertex = (ts_alloc.read_float(), ts_alloc.read_float())
+                t2verts_buffer = ts_alloc.read_float_list(num_t2verts*2)
+                for x in range(0, num_t2verts*2, 2):
+                    tvertex = (t2verts_buffer[x], t2verts_buffer[x+1])
                     self._t2vertices.append(tvertex)
 
             num_vcolors = ts_alloc.read32()
             if parent_mesh < 0:
-                for _ in range(num_vcolors):
-                    packed_color = ts_alloc.read32()
-
+                vcolors = ts_alloc.read32_list(num_vcolors)
+                for packed_color in vcolors:
                     red   =  packed_color & 0xFF
                     green = (packed_color >> 8)  & 0xFF
                     blue  = (packed_color >> 16) & 0xFF
@@ -125,14 +124,12 @@ class TSMesh:
 
                     self._colors.append((red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0))
 
-
         # normals
         if version > 21:
             if parent_mesh < 0:
                 for _ in range(num_verts):
                     normal = (ts_alloc.read_float(), ts_alloc.read_float(), ts_alloc.read_float())
-                for _ in range(num_verts):
-                    ts_alloc.read8()  # encoded normals, skip
+                ts_alloc.skip8(num_verts) # encoded normals, skip
         else:
             if parent_mesh < 0:
                 for _ in range(num_verts):
@@ -155,8 +152,7 @@ class TSMesh:
                 material_indices.append(ts_alloc.read32())
 
             sz_ind_in = ts_alloc.read32()
-            for _ in range(sz_ind_in):
-                self._indices.append(ts_alloc.read32())
+            self._indices.extend(ts_alloc.read32_list(sz_ind_in))                
         else:
             # mesh primitives (start, numElements) indices are stored as 16 bit values
             sz_prim_in = ts_alloc.read32()
@@ -167,8 +163,7 @@ class TSMesh:
                 material_indices.append(ts_alloc.read32())
 
             sz_ind_in = ts_alloc.read32()
-            for _ in range(sz_ind_in):
-                self._indices.append(ts_alloc.read16())
+            self._indices.extend(ts_alloc.read16_list(sz_ind_in))
 
         # setup primitives from data
         for x in range(sz_prim_in):
@@ -181,8 +176,7 @@ class TSMesh:
             
         # merge indices (deprecated)
         num_merge_indices = ts_alloc.read32()
-        for _ in range(num_merge_indices):
-            ts_alloc.read16()
+        ts_alloc.skip16(num_merge_indices)
 
         ts_alloc.align32()
 

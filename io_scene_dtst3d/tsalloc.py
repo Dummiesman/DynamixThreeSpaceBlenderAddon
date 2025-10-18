@@ -54,6 +54,42 @@ class TSAlloc:
         self.size += 1
         return value
 
+    def read_float_list(self, count: int):
+        values = list(struct.unpack_from(f'<{count}f', self.data, self.ptr32))
+        self.ptr32 += count * 4
+        self.size += count * 4
+        return values
+
+    def read32_list(self, count: int):
+        values = list(struct.unpack_from(f'<{count}i', self.data, self.ptr32))
+        self.ptr32 += count * 4
+        self.size += count * 4
+        return values
+
+    def read16_list(self, count: int):
+        values = list(struct.unpack_from(f'<{count}h', self.data, self.ptr16))
+        self.ptr16 += count * 2
+        self.size += count * 2
+        return values
+
+    def read8_list(self, count: int):
+        values = list(self.data[self.ptr8:self.ptr8 + count])
+        self.ptr8 += count
+        self.size += count
+        return values
+    
+    def skip8(self, count: int = 1):
+        self.ptr8 += count
+        self.size += count
+
+    def skip16(self, count: int = 1):
+        self.ptr16 += count * 2
+        self.size += count * 2
+
+    def skip32(self, count: int = 1):
+        self.ptr32 += count * 4
+        self.size += count * 4
+    
     def check_guard(self):
         got32 = self.read32()
         if self.guard32 != got32:
