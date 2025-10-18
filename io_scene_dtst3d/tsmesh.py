@@ -36,6 +36,7 @@ class TSMesh:
             self._colors = []
             self._primitives: List[TSDrawPrimitive] = []
             self._indices = []
+            self._parent_mesh = -1
 
     @property
     def vertices(self):
@@ -74,6 +75,8 @@ class TSMesh:
         num_frames = ts_alloc.read32()
         num_mat_names = ts_alloc.read32()
         parent_mesh = ts_alloc.read32()
+
+        self._parent_mesh = parent_mesh
 
         bounds = [ts_alloc.read_float() for _ in range(6)]
         center = [ts_alloc.read_float() for _ in range(3)]
@@ -184,3 +187,42 @@ class TSMesh:
         flags = ts_alloc.read32()
 
         ts_alloc.check_guard()
+
+class TSSkinnedMesh(TSMesh):
+    def __init__(self):
+        super().__init__()
+
+    def assemble(self, ts_alloc, version):
+        super().assemble(ts_alloc, version)
+
+        maxBones = -1 if version < 27 else ts_alloc.read32()
+
+        if version < 27:
+            # get initial verts
+            sz = ts_alloc.read32()
+            if self._parent_mesh < 0:
+                ts_alloc.skip32(sz * 3) # initial verts
+
+            if version > 21:
+                if self._parent_mesh < 0:
+                    ts_alloc.skip32(sz * 3) # normals
+                    ts_alloc.skip8(sz) # encoded normals
+            else:
+                if self._parent_mesh < 0:
+                    ts_alloc.skip32(sz * 3) # normals
+
+        sz = ts_alloc.read32()
+        ts_alloc.skip32(16 * sz) # initial transforms
+
+        sz = ts_alloc.read32()
+        print(f"Skin Mesh Weights Count: {sz} vertex count {len(self._vertices)}")
+        ts_alloc.skip32(sz) # vertex index list
+        ts_alloc.skip32(sz) # bone index list
+        ts_alloc.skip32(sz) # weight list
+
+        sz = ts_alloc.read32()
+        ts_alloc.skip32(sz) # node index list
+
+        ts_alloc.check_guard()
+
+    

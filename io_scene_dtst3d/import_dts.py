@@ -178,7 +178,7 @@ def read_dts_file(file, filepath):
 
             parent = None if shape_node.parent_index < 0 else hierarchy.get(shape_node.parent_index)
             created_object = None
-            if isinstance(shape_mesh, TSMesh):
+            if isinstance(shape_mesh, TSMesh) or isinstance(shape_mesh, TSSkinnedMesh):
                 created_object = create_mesh_object_from_shape_object(shape, shape_object, 0)
             elif isinstance(shape_mesh, TSNullMesh):
                 created_object = create_dummy_object_from_shape_object(shape, shape_object)

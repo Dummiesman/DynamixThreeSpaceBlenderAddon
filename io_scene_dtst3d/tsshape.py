@@ -283,7 +283,7 @@ class TSShape:
         if version < 19:
             raise Exception("This DTS file is too old")
         if version >= 27:
-            raise Exception("This DTS file is too new, please file an issue report with the problem file attached.")
+            raise Exception(f"This DTS file is too new (version {version}), please file an issue report with the problem file attached.")
 
         size_mem_buffer = struct.unpack('<i', reader.read(4))[0]
         start_u16 = struct.unpack('<i', reader.read(4))[0]
@@ -488,6 +488,10 @@ class TSShape:
             elif mesh_type == MeshType.NullMeshType:
                 mesh = TSNullMesh()
                 self._meshes.append(mesh)
+            elif mesh_type == MeshType.SkinMeshType:
+                mesh = TSSkinnedMesh()
+                mesh.assemble(ts_alloc, version)
+                self._meshes.append(mesh)
             else:
                 raise NotImplementedError(f"Can't parse mesh of type {mesh_type}")
 
@@ -507,6 +511,15 @@ class TSShape:
         ts_alloc.check_guard()
 
         if version < 23:
-            raise NotImplementedError("Skin information")
+            # read skinned meshes from old versions
+            ts_alloc.skip32(num_skins) # detail first skin
+            ts_alloc.skip32(num_skins) # detail num skins
 
-            
+            ts_alloc.check_guard()
+
+            for _ in range(num_skins):
+                mesh = TSSkinnedMesh()
+                mesh.assemble(ts_alloc, version)
+                self._meshes.append(mesh)
+
+            ts_alloc.check_guard()
