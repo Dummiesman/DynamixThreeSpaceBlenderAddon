@@ -73,7 +73,7 @@ def create_dummy_object_from_shape_object(shape, shape_object):
     return ob
 
 
-def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
+def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index, merge_verts=True):
     scn = bpy.context.scene
     
     shape_node = shape.nodes[shape_object.node_index]
@@ -110,15 +110,20 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
     # which requires unique vertices for each combination of TVerts/Normals
     vertex_count = len(shape_mesh.vertices)
     vert_remap = {}
-    remapped_verts = []    
+    vertices = []    
     
-    for x in range(vertex_count):
-        position = shape_mesh.vertices[x]
-        normal = shape_mesh.normals[x]
-        key = (position, normal)
-        if not key in vert_remap:
-            vert_remap[key] = len(vert_remap)
-            remapped_verts.append(bm.verts.new(translate_vert(position)))
+    if merge_verts:
+        for x in range(vertex_count):
+            position = shape_mesh.vertices[x]
+            normal = shape_mesh.normals[x]
+            key = (position, normal)
+            if not key in vert_remap:
+                vert_remap[key] = len(vert_remap)
+                vertices.append(bm.verts.new(translate_vert(position)))
+    else:
+        for x in range(vertex_count):
+            position = shape_mesh.vertices[x]
+            vertices.append(bm.verts.new(translate_vert(position)))
 
     # assemble blender mesh
     mesh_indices = shape_mesh.indices 
@@ -140,18 +145,19 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
                 prim_indices = triangle_strip_to_list(strip_indices, False)
 
             # remap prim indices
-            for x in range(len(prim_indices)):
-                vert_index = prim_indices[x]
-                position = shape_mesh.vertices[vert_index]
-                normal = shape_mesh.normals[vert_index]
-                key = (position, normal)
-                prim_indices[x] = vert_remap[key]
+            if merge_verts:
+                for x in range(len(prim_indices)):
+                    vert_index = prim_indices[x]
+                    position = shape_mesh.vertices[vert_index]
+                    normal = shape_mesh.normals[vert_index]
+                    key = (position, normal)
+                    prim_indices[x] = vert_remap[key]
 
             # create faces
             for x in range(0, len(prim_indices), 3):
                 indices = (prim_indices[x + 2], prim_indices[x + 1], prim_indices[x])
                 try:
-                    bmverts = (remapped_verts[indices[0]], remapped_verts[indices[1]], remapped_verts[indices[2]])
+                    bmverts = (vertices[indices[0]], vertices[indices[1]], vertices[indices[2]])
                     face = bm.faces.new(bmverts)
 
                     if uv_layer is not None:
@@ -181,7 +187,7 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
     return ob
 
 
-def read_dts_file(file, filepath):
+def read_dts_file(file, filepath, merge_verts=True):
     time1 = time.perf_counter()
 
     # read shape
@@ -211,7 +217,7 @@ def read_dts_file(file, filepath):
             parent = None if shape_node.parent_index < 0 else hierarchy.get(shape_node.parent_index)
             created_object = None
             if isinstance(shape_mesh, TSMesh) or isinstance(shape_mesh, TSSkinnedMesh):
-                created_object = create_mesh_object_from_shape_object(shape, shape_object, 0)
+                created_object = create_mesh_object_from_shape_object(shape, shape_object, 0, merge_verts)
             elif isinstance(shape_mesh, TSNullMesh):
                 created_object = create_dummy_object_from_shape_object(shape, shape_object)
             else:
@@ -231,7 +237,8 @@ def read_dts_file(file, filepath):
 # IMPORT
 ######################################################
 def load_dts(filepath,
-             context):
+             context,
+             merge_verts=True):
 
     print("importing DTS: %r..." % (filepath))
 
@@ -239,7 +246,7 @@ def load_dts(filepath,
     file = open(filepath, 'rb')
 
     # start reading our bnd file
-    read_dts_file(file, filepath)
+    read_dts_file(file, filepath, merge_verts)
 
     print(" done in %.4f sec." % (time.perf_counter() - time1))
     file.close()
@@ -248,10 +255,12 @@ def load_dts(filepath,
 def load(operator,
          context,
          filepath="",
+         merge_verts=True,
          ):
 
     load_dts(filepath,
              context,
+             merge_verts,
              )
 
     return {'FINISHED'}

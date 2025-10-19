@@ -35,6 +35,12 @@ class ImportDTS(bpy.types.Operator, ImportHelper):
     filename_ext = ".dts"
     filter_glob: StringProperty(default="*.dts", options={'HIDDEN'})
 
+    merge_verts: BoolProperty(
+        name="Merge Vertices",
+        description="The DTS format requires discontinuous normals, UVs, and other vertex attributes to be stored as separate vertices as required for rendering on typical graphics hardware. This option attempts to combine co-located vertices where possible.",
+        default=True,
+        )
+    
     def execute(self, context):
         from . import import_dts
         keywords = self.as_keywords(ignore=("axis_forward",

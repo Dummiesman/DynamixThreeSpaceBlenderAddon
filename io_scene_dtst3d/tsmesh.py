@@ -24,7 +24,6 @@ class TSDrawPrimitive:
         self.type = material_and_flags & TSDrawPrimitiveType.TypeMask
         self.material_index = material_and_flags & TSDrawPrimitiveType.MaterialMask
 
-        
 class TSNullMesh:
     pass
 
@@ -66,6 +65,10 @@ class TSMesh:
     @property
     def indices(self) -> List[int]:
         return self._indices
+
+    @property
+    def parent_mesh(self) -> int:
+        return self._parent_mesh
     
     def copy_vertex_data_from(self, other):
         """Copies mesh vertex data from a parent mesh"""
@@ -73,6 +76,7 @@ class TSMesh:
         self._tvertices = other._tvertices.copy()
         self._t2vertices = other._t2vertices.copy()
         self._colors = other._colors.copy()
+        self._normals = other._normals.copy()
 
     def assemble(self, ts_alloc, version):
         ts_alloc.check_guard()
