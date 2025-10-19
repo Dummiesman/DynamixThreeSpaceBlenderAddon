@@ -106,12 +106,22 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
 
     scn.collection.objects.link(ob)
 
+    # remap to merge verts with same normals for Blender because DTS is a game-ready format
+    # which requires unique vertices for each combination of TVerts/Normals
+    vertex_count = len(shape_mesh.vertices)
+    vert_remap = {}
+    remapped_verts = []    
+    
+    for x in range(vertex_count):
+        position = shape_mesh.vertices[x]
+        normal = shape_mesh.normals[x]
+        key = (position, normal)
+        if not key in vert_remap:
+            vert_remap[key] = len(vert_remap)
+            remapped_verts.append(bm.verts.new(translate_vert(position)))
+
     # assemble blender mesh
     mesh_indices = shape_mesh.indices 
-    vertices = []
-
-    for vert in shape_mesh.vertices:
-        vertices.append(bm.verts.new(translate_vert(vert)))
     
     for prim in shape_mesh.primitives:
         # setup material (TODO: have a list of mats)
@@ -121,6 +131,7 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
             ob.data.materials.append(create_material(ts_material.name))
 
         if prim.type == TSDrawPrimitiveType.Triangles or prim.type == TSDrawPrimitiveType.Strip:
+            # get raw primitive indices
             prim_indices = []
             if prim.type == TSDrawPrimitiveType.Triangles:
                 prim_indices = mesh_indices[prim.start:prim.start+prim.num_elements]
@@ -128,10 +139,19 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
                 strip_indices = mesh_indices[prim.start:prim.start+prim.num_elements]
                 prim_indices = triangle_strip_to_list(strip_indices, False)
 
+            # remap prim indices
+            for x in range(len(prim_indices)):
+                vert_index = prim_indices[x]
+                position = shape_mesh.vertices[vert_index]
+                normal = shape_mesh.normals[vert_index]
+                key = (position, normal)
+                prim_indices[x] = vert_remap[key]
+
+            # create faces
             for x in range(0, len(prim_indices), 3):
                 indices = (prim_indices[x + 2], prim_indices[x + 1], prim_indices[x])
                 try:
-                    bmverts = (vertices[indices[0]], vertices[indices[1]], vertices[indices[2]])
+                    bmverts = (remapped_verts[indices[0]], remapped_verts[indices[1]], remapped_verts[indices[2]])
                     face = bm.faces.new(bmverts)
 
                     if uv_layer is not None:
@@ -162,9 +182,21 @@ def create_mesh_object_from_shape_object(shape, shape_object, shape_mesh_index):
 
 
 def read_dts_file(file, filepath):
+    time1 = time.perf_counter()
+
     # read shape
     shape = TSShape()
     shape.read_from_path(filepath)
+
+    print("   parsed shape file in %.4f sec." % (time.perf_counter() - time1))
+    time1 = time.perf_counter()
+
+    for sequence in shape.sequences:
+        if sequence.name_index >= 0:
+            sequence_name = shape.names[sequence.name_index]
+            print(f"Found sequence: {sequence_name}, {sequence.num_keyframes} keyframes")
+        else:
+            print(f"Found unnamed sequence with {sequence.num_keyframes} keyframes")
 
     # create Blender representation
     hierarchy = {}
@@ -192,6 +224,8 @@ def read_dts_file(file, filepath):
                     created_object.matrix_parent_inverse = parent.matrix_world.inverted()
         else:
             print(f"Not creating object for {shape_object_name}: no assigned mesh")
+
+    print("   created objects in %.4f sec." % (time.perf_counter() - time1))
 
 ######################################################
 # IMPORT

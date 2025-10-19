@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Dynamix Three Space",
     "author": "Dummiesman",
-    "version": (0, 0, 4),
+    "version": (0, 0, 5),
     "blender": (3, 6, 0),
     "location": "File > Import-Export",
     "description": "Import Dynamix Three Space (DTS) models from Torque3D",

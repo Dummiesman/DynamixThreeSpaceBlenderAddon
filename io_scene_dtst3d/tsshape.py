@@ -279,7 +279,9 @@ class TSShape:
     def read(self, stream: BinaryIO):
         reader = stream
 
-        version = struct.unpack('<i', reader.read(4))[0] & 0xFF
+        full_version = struct.unpack('<i', reader.read(4))[0] # version and exporter version packed as two 16-bit values
+        version = full_version & 0xFF
+
         if version < 19:
             raise Exception("This DTS file is too old")
         if version >= 27:

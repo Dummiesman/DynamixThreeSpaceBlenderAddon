@@ -30,28 +30,33 @@ class TSNullMesh:
 
 class TSMesh:
     def __init__(self):
-            self._vertices = []
-            self._tvertices = []
-            self._t2vertices = []
-            self._colors = []
+            self._vertices: List[tuple[float, float, float]] = []
+            self._tvertices: List[tuple[float, float]] = []
+            self._t2vertices: List[tuple[float, float]] = []
+            self._colors: List[tuple[float, float, float, float]] = []
+            self._normals: List[tuple[float, float, float]] = []
             self._primitives: List[TSDrawPrimitive] = []
-            self._indices = []
-            self._parent_mesh = -1
+            self._indices: List[int] = []
+            self._parent_mesh: int = -1
 
     @property
-    def vertices(self):
+    def vertices(self) -> List[tuple[float, float, float]]:
         return self._vertices
     
     @property
-    def tvertices(self):
+    def normals(self) -> List[tuple[float, float, float]]:
+        return self._normals
+    
+    @property
+    def tvertices(self) -> List[tuple[float, float]]:
         return self._tvertices
     
     @property
-    def t2vertices(self):
+    def t2vertices(self) -> List[tuple[float, float]]:
         return self._t2vertices
     
     @property
-    def colors(self):
+    def colors(self) -> List[tuple[float, float, float, float]]:
         return self._colors
     
     @property
@@ -59,7 +64,7 @@ class TSMesh:
         return self._primitives
     
     @property
-    def indices(self):
+    def indices(self) -> List[int]:
         return self._indices
     
     def copy_vertex_data_from(self, other):
@@ -128,15 +133,14 @@ class TSMesh:
                     self._colors.append((red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0))
 
         # normals
-        if version > 21:
-            if parent_mesh < 0:
-                for _ in range(num_verts):
-                    normal = (ts_alloc.read_float(), ts_alloc.read_float(), ts_alloc.read_float())
-                ts_alloc.skip8(num_verts) # encoded normals, skip
-        else:
-            if parent_mesh < 0:
-                for _ in range(num_verts):
-                    normal = (ts_alloc.read_float(), ts_alloc.read_float(), ts_alloc.read_float())
+        if parent_mesh < 0:
+            normals_buffer = ts_alloc.read_float_list(num_verts*3)
+            for x in range(0, num_verts*3, 3):
+                normal = (normals_buffer[x], normals_buffer[x+1], normals_buffer[x+2])
+                self._normals.append(normal)
+
+        if version > 21 and parent_mesh < 0:
+            ts_alloc.skip8(num_verts) # encoded normals, skip
 
         # primitives and indices
         sz_prim_in = 0
@@ -215,7 +219,6 @@ class TSSkinnedMesh(TSMesh):
         ts_alloc.skip32(16 * sz) # initial transforms
 
         sz = ts_alloc.read32()
-        print(f"Skin Mesh Weights Count: {sz} vertex count {len(self._vertices)}")
         ts_alloc.skip32(sz) # vertex index list
         ts_alloc.skip32(sz) # bone index list
         ts_alloc.skip32(sz) # weight list
